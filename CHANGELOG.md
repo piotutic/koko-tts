@@ -5,6 +5,12 @@ All notable changes to the Koko TTS project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2024-12-17
+
+### Fixed
+- **Package Contents**: Fixed npm package including unwanted files (.claude/, *.tgz)
+- **Clean Distribution**: Updated .npmignore to exclude development files
+
 ## [0.1.1] - 2024-12-17
 
 ### Fixed

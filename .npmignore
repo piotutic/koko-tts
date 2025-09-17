@@ -75,3 +75,9 @@ pnpm-lock.yaml
 # Backup files
 *.backup
 *.bak
+
+# Tarballs
+*.tgz
+
+# Claude settings
+.claude/

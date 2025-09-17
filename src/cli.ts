@@ -26,7 +26,7 @@ import type {
 } from './types.js';
 
 // CLI version
-const CLI_VERSION = '0.1.1';
+const CLI_VERSION = '0.1.2';
 
 // Create CLI application
 const program = new Command();
