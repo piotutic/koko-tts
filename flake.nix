@@ -16,7 +16,7 @@
 
       koko-tts = pkgs.stdenv.mkDerivation rec {
         pname = "koko-tts";
-        version = "0.1.0";
+        version = "0.1.1";
 
         src = ./.;
 

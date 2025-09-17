@@ -26,7 +26,7 @@ import type {
 } from './types.js';
 
 // CLI version
-const CLI_VERSION = '0.1.0';
+const CLI_VERSION = '0.1.1';
 
 // Create CLI application
 const program = new Command();
@@ -905,15 +905,11 @@ process.on('unhandledRejection', (reason) => {
 });
 
 // Parse CLI arguments
-if (import.meta.url === `file://${process.argv[1]}`) {
-  // If no arguments provided (only script name), launch interactive mode
-  if (process.argv.length <= 2) {
-    try {
-      await interactiveMode();
-    } catch (error) {
-      handleError(error);
-    }
-  } else {
-    program.parse();
-  }
+// Always execute when this CLI file is run (it has #!/usr/bin/env node shebang)
+if (process.argv.length <= 2) {
+  // No arguments provided - launch interactive mode
+  interactiveMode().catch(handleError);
+} else {
+  // Arguments provided - parse commands
+  program.parse();
 }
