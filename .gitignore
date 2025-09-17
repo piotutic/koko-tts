@@ -1,0 +1,103 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# TypeScript compilation output
+dist/
+*.tsbuildinfo
+
+# Audio output files
+output/
+streaming_output/
+voice_showcase/
+*.wav
+*.mp3
+*.ogg
+*.flac
+*.aac
+*.pcm
+
+# Kokoro TTS model cache
+.cache/
+*.onnx
+huggingface_cache/
+transformers_cache/
+
+# Configuration files
+.kokororc*
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# TypeScript cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Temporary folders
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Nix build results
+result
+result-*
+
+# direnv
+.direnv/
+
+# Test files
+test-output/
+*.test.wav
+
+# Backup files
+*.backup.*
+*.bak
+
+# Claude
+.claude

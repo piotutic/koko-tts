@@ -1,0 +1,64 @@
+{
+  "name": "koko-tts",
+  "version": "0.1.0",
+  "description": "🎤 The friendly TTS CLI - Just run 'koko' for instant text-to-speech magic!",
+  "main": "dist/cli.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "postbuild": "chmod +x dist/cli.js",
+    "koko": "npm run build && node dist/cli.js",
+    "cli": "node --loader ts-node/esm src/cli.ts",
+    "clean": "rm -rf dist",
+    "type-check": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "tts",
+    "text-to-speech",
+    "kokoro",
+    "cli",
+    "voice",
+    "speech",
+    "audio",
+    "ai",
+    "typescript"
+  ],
+  "author": "Pio Tutic",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/your-username/koko-tts#readme",
+  "bugs": {
+    "url": "https://github.com/your-username/koko-tts/issues"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "clear": "^0.1.0",
+    "commander": "^12.0.0",
+    "inquirer": "^9.2.0",
+    "kokoro-js": "^1.0.0",
+    "ora": "^8.0.0",
+    "yaml": "^2.4.0"
+  },
+  "devDependencies": {
+    "@types/clear": "^0.1.4",
+    "@types/inquirer": "^9.0.0",
+    "@types/node": "^20.11.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/piotutic/koko-tts.git"
+  },
+  "bin": {
+    "koko": "./dist/cli.js",
+    "koko-tts": "./dist/cli.js"
+  }
+}

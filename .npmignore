@@ -1,0 +1,77 @@
+# Source files (only include compiled dist/)
+src/
+tsconfig.json
+
+# Development files
+.git/
+.gitignore
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Nix development environment
+flake.nix
+flake.lock
+.direnv/
+
+# Test and demo files
+test*/
+demo*/
+example*/
+*.test.*
+*.spec.*
+
+# Documentation source
+docs/
+*.md
+!README.md
+
+# Logs and temporary files
+logs/
+*.log
+tmp/
+temp/
+*.tmp
+*.temp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts we don't need in package
+.nyc_output/
+coverage/
+*.tsbuildinfo
+
+# Audio files (generated content)
+*.wav
+*.mp3
+*.m4a
+*.pcm
+
+# Environment and config files
+.env*
+.kokororc*
+
+# Development dependencies
+.eslintrc*
+.prettierrc*
+jest.config.*
+.babelrc*
+
+# CI/CD files
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+
+# Lock files (let users choose their package manager)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Backup files
+*.backup
+*.bak
