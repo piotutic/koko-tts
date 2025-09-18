@@ -16,6 +16,8 @@ A simple, powerful command-line tool for text-to-speech generation using the Kok
 - 🌊 **Streaming** - Real-time generation for long texts
 - 💾 **Multiple Formats** - WAV and PCM output
 - 🔄 **Auto-Chunking** - Bypass 25-second limit with automatic text splitting
+- 🧩 **Audio Stitching** - Chunks automatically combined into single files
+- 🧹 **Auto-Cleanup** - Temp files cleaned automatically
 
 ## 🚀 Quick Start
 
@@ -56,7 +58,7 @@ npx koko-tts@latest generate --file story.txt --voice bf_emma
 
 ```bash
 # Clone and enter development environment
-git clone <your-repo-url>
+git clone https://github.com/piotutic/koko-tts
 cd kokoro-tts-typescript
 nix develop
 
@@ -122,13 +124,13 @@ koko interactive
 
 ### Recommended Voices (Highest Quality)
 
-| Voice ID | Description | Language | Gender |
-|----------|-------------|----------|---------|
-| `af_heart` | Warm, expressive ⭐ | US English | Female |
-| `af_bella` | Clear, professional ⭐ | US English | Female |
-| `bf_emma` | Elegant, refined ⭐ | UK English | Female |
-| `am_michael` | Smooth, versatile | US English | Male |
-| `bm_george` | Distinguished, clear | UK English | Male |
+| Voice ID     | Description            | Language   | Gender |
+| ------------ | ---------------------- | ---------- | ------ |
+| `af_heart`   | Warm, expressive ⭐    | US English | Female |
+| `af_bella`   | Clear, professional ⭐ | US English | Female |
+| `bf_emma`    | Elegant, refined ⭐    | UK English | Female |
+| `am_michael` | Smooth, versatile      | US English | Male   |
+| `bm_george`  | Distinguished, clear   | UK English | Male   |
 
 ⭐ = Top quality voices
 
@@ -136,20 +138,20 @@ koko interactive
 
 - **American Female**: `af_heart`, `af_bella`, `af_sarah` (default), `af_nicole`, `af_kore`
 - **American Male**: `am_michael`, `am_fenrir`, `am_puck`, `am_echo`, `am_eric`
-- **British Female**: `bf_emma`, `bf_isabella`, `bf_alice`, `bf_lily`  
+- **British Female**: `bf_emma`, `bf_isabella`, `bf_alice`, `bf_lily`
 - **British Male**: `bm_george`, `bm_fable`, `bm_lewis`, `bm_daniel`
 
 ## ⚙️ Options
 
-| Option | Description | Default | Range |
-|--------|-------------|---------|-------|
-| `--voice` | Voice to use | `af_sarah` | See voice list |
-| `--speed` | Speaking speed | `1.0` | `0.5` - `2.0` |
-| `--temperature` | Expressiveness | `0.7` | `0.1` - `1.0` |
-| `--output` | Output filename | `output.wav` | Any path |
-| `--file` | Input text file | - | Any .txt file |
-| `--quiet` | Minimal output | `false` | Boolean |
-| `--streaming` | Stream long texts | `false` | Boolean |
+| Option          | Description       | Default      | Range          |
+| --------------- | ----------------- | ------------ | -------------- |
+| `--voice`       | Voice to use      | `af_sarah`   | See voice list |
+| `--speed`       | Speaking speed    | `1.0`        | `0.5` - `2.0`  |
+| `--temperature` | Expressiveness    | `0.7`        | `0.1` - `1.0`  |
+| `--output`      | Output filename   | `output.wav` | Any path       |
+| `--file`        | Input text file   | -            | Any .txt file  |
+| `--quiet`       | Minimal output    | `false`      | Boolean        |
+| `--streaming`   | Stream long texts | `false`      | Boolean        |
 
 ## 📋 Examples
 
@@ -191,7 +193,7 @@ koko
 # 1. Main Menu
 # What would you like to do?
 # ❯ ✨ Generate speech
-#   🎭 Browse voices  
+#   🎭 Browse voices
 #   🚪 Exit
 
 # 2. Input Method (when generating speech)
@@ -255,6 +257,35 @@ koko generate "Text" --config my-settings.yml
 koko generate "Test" --voice af_heart --save-config my-preset.yml
 ```
 
+### Audio Stitching & Chunks
+
+```bash
+# Default: Chunks are automatically stitched into single file
+koko generate --file long-text.txt
+# → Creates: combined-audio.wav
+
+# Keep individual chunks AND combined file
+koko generate --file long-text.txt --keep-chunks
+# → Creates: combined-audio.wav + individual chunk files
+
+# Disable stitching (legacy behavior)
+koko generate --file long-text.txt --no-stitch
+# → Creates: audio_001.wav, audio_002.wav, audio_003.wav...
+```
+
+### Cleanup
+
+```bash
+# Clean temp files older than 24 hours (default)
+koko cleanup
+
+# Custom cleanup age
+koko cleanup --max-age 48
+
+# Verbose cleanup output
+koko cleanup --verbose
+```
+
 ### Performance & Quality
 
 ```bash
@@ -292,6 +323,7 @@ Koko TTS automatically organizes all files in a `.koko-tts/` directory:
 ```
 
 **Benefits:**
+
 - Clean workspace (no scattered output files)
 - Easy cleanup (delete entire `.koko-tts/` folder)
 - Organized by date and generation mode
@@ -302,12 +334,14 @@ Koko TTS automatically organizes all files in a `.koko-tts/` directory:
 ### Common Issues
 
 **Model Download Fails**
+
 ```bash
 # Check internet connection and retry
 koko generate "test" --verbose
 ```
 
 **Audio File Issues**
+
 ```bash
 # Verify output file was created
 ls -la output.wav
@@ -319,6 +353,7 @@ aplay output.wav
 ```
 
 **Permission Denied**
+
 ```bash
 # Ensure CLI has execute permissions
 npm run build  # This sets permissions automatically
@@ -332,7 +367,7 @@ npm run build  # This sets permissions automatically
 src/
 ├── cli.ts           # Main CLI application
 ├── tts-engine.ts    # TTS engine wrapper
-├── voices.ts        # Voice configurations  
+├── voices.ts        # Voice configurations
 ├── types.ts         # TypeScript definitions
 └── utils.ts         # Utility functions
 ```

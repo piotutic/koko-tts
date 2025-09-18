@@ -16,6 +16,7 @@ import { TypedKokoroTTS } from './tts-engine.js';
 import { VOICES, VOICE_CATEGORIES, VOICE_PRESETS, getVoiceInfo } from './voices.js';
 import { FileUtils, ConfigUtils, ValidationUtils, StringUtils, PlatformUtils } from './utils.js';
 import { getDirectoryService } from './services/directory.js';
+import { AudioStitcher, type AudioChunk } from './services/audio-stitcher.js';
 import type { 
   CliOptions, 
   VoiceId, 
@@ -54,6 +55,8 @@ program
   .option('--auto-chunk', 'Automatically split long text into chunks', true)
   .option('--chunk-size <size>', 'Maximum characters per chunk (with safety buffer)', parseInt, 250)
   .option('--warn-limit', 'Show warning when text exceeds model limits', true)
+  .option('--keep-chunks', 'Keep individual chunk files when stitching', false)
+  .option('--no-stitch', 'Disable audio stitching (save chunks separately)')
   .option('--verbose', 'Verbose output', false)
   .option('--quiet', 'Quiet mode (minimal output)', false);
 
@@ -180,6 +183,22 @@ program
   });
 
 /**
+ * Cleanup command
+ */
+program
+  .command('cleanup')
+  .description('Clean up temporary files')
+  .option('--max-age <hours>', 'Remove temp files older than N hours', parseInt, 24)
+  .option('--verbose', 'Show detailed cleanup information')
+  .action(async (options: any) => {
+    try {
+      await cleanupTempFiles(options);
+    } catch (error) {
+      handleError(error);
+    }
+  });
+
+/**
  * Parse and validate CLI options
  */
 async function parseAndValidateOptions(options: any, text?: string): Promise<CliOptions> {
@@ -231,8 +250,11 @@ async function parseAndValidateOptions(options: any, text?: string): Promise<Cli
     preview: false,
     autoChunk: options.autoChunk !== false, // Default to true
     chunkSize: options.chunkSize || 250,
-    warnLimit: options.warnLimit !== false // Default to true
+    warnLimit: options.warnLimit !== false, // Default to true
+    keepChunks: options.keepChunks || false,
+    noStitch: options.stitch === false
   };
+
 
   // Apply configuration defaults
   if (config) {
@@ -458,13 +480,16 @@ async function generateStreamingSpeech(
     console.log(`\n✅ Streaming completed! Generated ${chunkCount} chunks`);
   }
 
-  // Combine chunks and save (simplified - would need proper audio concatenation)
+  // Combine chunks using audio stitcher
   if (chunks.length > 0) {
-    const finalAudio = chunks[chunks.length - 1]; // Use last chunk for demo
-    await finalAudio.save(cliOptions.output);
+    if (!cliOptions.quiet) {
+      console.log(`\n💾 Stitching ${chunks.length} streaming chunks...`);
+    }
+    
+    const outputFiles = await combineAudioChunks(chunks, cliOptions);
     
     if (!cliOptions.quiet) {
-      console.log(`💾 Audio saved to: ${chalk.green(cliOptions.output)}`);
+      console.log(`💾 Audio saved to: ${chalk.green(outputFiles[0]!)}`);
     }
   }
 }
@@ -505,7 +530,7 @@ async function generateChunkedSpeech(text: string, options: CliOptions): Promise
     }
 
     // Process each chunk
-    const audioChunks: any[] = [];
+    const audioChunks: AudioChunk[] = [];
     const generationOptions = {
       voice: options.voice,
       speed: options.speed,
@@ -543,35 +568,47 @@ async function generateChunkedSpeech(text: string, options: CliOptions): Promise
       }
     }
 
-    // Save audio chunks as separate files
+    // Combine/save audio chunks
     if (!options.quiet) {
-      spinner.start('💾 Saving audio chunks...');
+      const action = options.noStitch ? 'Saving audio chunks...' : 'Stitching audio chunks...';
+      spinner.start(`💾 ${action}`);
     }
     
-    const outputFiles = await combineAudioChunks(audioChunks, options.output);
+    const outputFiles = await combineAudioChunks(audioChunks, options);
     
     if (!options.quiet) {
-      if (outputFiles.length === 1) {
+      const mainFile = outputFiles[0]!;
+      const isStitched = !options.noStitch && chunks.length > 1;
+      
+      if (isStitched) {
+        spinner.succeed('🎉 Audio stitched and generated successfully!');
+      } else if (outputFiles.length === 1) {
         spinner.succeed('🎉 Audio generated successfully!');
       } else {
         spinner.succeed(`🎉 All ${outputFiles.length} audio chunks saved!`);
       }
       
       if (!options.interactive) {
-        if (outputFiles.length === 1) {
-          console.log(`💾 Audio saved to: ${chalk.green(outputFiles[0])}`);
+        if (isStitched && chunks.length > 1) {
+          console.log(`💾 Combined audio saved to: ${chalk.green(mainFile)}`);
+          console.log(`📊 Stitched ${chalk.green(chunks.length.toString())} chunks into single file`);
+          
+          if (options.keepChunks && outputFiles.length > 1) {
+            console.log(`📦 Individual chunks also saved (${outputFiles.length - 1} files)`);
+          }
+        } else if (outputFiles.length === 1) {
+          console.log(`💾 Audio saved to: ${chalk.green(mainFile)}`);
         } else {
           console.log(`💾 Generated ${chalk.green(outputFiles.length.toString())} audio files:`);
           outputFiles.forEach((file, index) => {
             console.log(`   ${index + 1}. ${chalk.green(path.basename(file))}`);
           });
-          console.log(chalk.yellow('\n📝 Note: Audio concatenation not yet implemented - each chunk saved separately'));
+          console.log(chalk.yellow('\n📝 Note: Audio stitching disabled - each chunk saved separately'));
         }
-        console.log(`📊 Total chunks processed: ${chalk.green(chunks.length.toString())}`);
         
-        // Show playback commands for first file
-        const playCommands = PlatformUtils.getAudioPlayerCommands(outputFiles[0]!);
-        console.log('\n🔊 To play the first audio file:');
+        // Show playback commands for main file
+        const playCommands = PlatformUtils.getAudioPlayerCommands(mainFile);
+        console.log('\n🔊 To play the audio:');
         playCommands.forEach(cmd => console.log(`  ${chalk.cyan(cmd)}`));
       } else {
         // Interactive mode - store output files for later display
@@ -586,16 +623,59 @@ async function generateChunkedSpeech(text: string, options: CliOptions): Promise
 }
 
 /**
- * Save audio chunks as separate numbered files
+ * Combine audio chunks using the AudioStitcher service
  */
-async function combineAudioChunks(audioChunks: any[], outputPath: string): Promise<string[]> {
+async function combineAudioChunks(audioChunks: AudioChunk[], options: CliOptions): Promise<string[]> {
   if (audioChunks.length === 0) {
     throw new Error('No audio chunks to combine');
   }
   
+  // If --no-stitch is enabled, save chunks separately using old method
+  if (options.noStitch) {
+    return await saveSeparateChunks(audioChunks, options.output);
+  }
+  
+  // Use directory service to get organized paths
+  const directoryService = getDirectoryService();
+  const mode = options.interactive ? 'interactive' : 'cli';
+  const chunkPaths = await directoryService.getChunkedOutputPaths(
+    path.basename(options.output),
+    mode,
+    true, // useDate
+    options.keepChunks
+  );
+  
+  try {
+    // Use temp directory for chunk processing
+    const tempDir = directoryService.getTempDir();
+    
+    // Stitch audio chunks together
+    const result = await AudioStitcher.stitchChunks(audioChunks, {
+      outputPath: chunkPaths.combinedPath,
+      keepChunks: options.keepChunks,
+      chunkDir: options.keepChunks ? chunkPaths.chunkDir : undefined,
+      tempDir: tempDir // Use temp directory for intermediate processing
+    });
+    
+    // Return list of created files
+    const outputFiles = [result.outputPath];
+    if (result.chunkPaths) {
+      outputFiles.push(...result.chunkPaths);
+    }
+    
+    return outputFiles;
+  } catch (error) {
+    throw new Error(`Audio stitching failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Save audio chunks as separate numbered files (legacy method)
+ */
+async function saveSeparateChunks(audioChunks: AudioChunk[], outputPath: string): Promise<string[]> {
   if (audioChunks.length === 1) {
     // Single chunk, just save directly
-    await audioChunks[0].save(outputPath);
+    await audioChunks[0]!.save(outputPath);
     return [outputPath];
   }
 
@@ -610,7 +690,7 @@ async function combineAudioChunks(audioChunks: any[], outputPath: string): Promi
     const chunkFilename = `${baseName}_${chunkNumber}${extension}`;
     const chunkPath = path.join(baseDir, chunkFilename);
     
-    await audioChunks[i].save(chunkPath);
+    await audioChunks[i]!.save(chunkPath);
     outputFiles.push(chunkPath);
   }
 
@@ -901,7 +981,9 @@ async function interactiveGenerate(): Promise<void> {
     preview: false,
     autoChunk: true,
     chunkSize: 250,
-    warnLimit: true
+    warnLimit: true,
+    keepChunks: false,
+    noStitch: false
   };
 
   await generateSpeech(options);
@@ -1102,6 +1184,108 @@ async function manageConfig(options: any): Promise<void> {
 }
 
 /**
+ * Clean up temporary files
+ */
+async function cleanupTempFiles(options: any): Promise<void> {
+  const directoryService = getDirectoryService();
+  const maxAgeHours = options.maxAge || 24;
+  const verbose = options.verbose || false;
+  
+  try {
+    if (verbose) {
+      console.log(chalk.blue('🧹 Cleaning up temporary files...'));
+      console.log(chalk.gray(`   Removing files older than ${maxAgeHours} hours`));
+    }
+    
+    // Get temp directory info before cleanup
+    const tempDir = directoryService.getTempDir().replace(/\/[^/]+$/, ''); // Get parent temp dir
+    let sizeBefore = 0;
+    let filesBefore = 0;
+    
+    try {
+      const entries = await fs.readdir(tempDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const sessionPath = path.join(tempDir, entry.name);
+          try {
+            sizeBefore += await getFolderSize(sessionPath);
+            filesBefore++;
+          } catch {
+            // Ignore errors for individual directories
+          }
+        }
+      }
+    } catch {
+      // Temp directory might not exist
+    }
+    
+    // Perform cleanup
+    await directoryService.cleanupTempFiles(maxAgeHours);
+    
+    // Get temp directory info after cleanup
+    let sizeAfter = 0;
+    let filesAfter = 0;
+    
+    try {
+      const entries = await fs.readdir(tempDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const sessionPath = path.join(tempDir, entry.name);
+          try {
+            sizeAfter += await getFolderSize(sessionPath);
+            filesAfter++;
+          } catch {
+            // Ignore errors for individual directories
+          }
+        }
+      }
+    } catch {
+      // Temp directory might not exist
+    }
+    
+    const filesRemoved = filesBefore - filesAfter;
+    const sizeFreed = sizeBefore - sizeAfter;
+    
+    if (verbose || filesRemoved > 0) {
+      console.log(chalk.green(`✅ Cleanup completed!`));
+      console.log(chalk.gray(`   ${filesRemoved} session directories removed`));
+      if (sizeFreed > 0) {
+        console.log(chalk.gray(`   ${StringUtils.formatFileSize(sizeFreed)} freed`));
+      }
+    } else {
+      console.log(chalk.green('✅ No cleanup needed - temp directory is clean'));
+    }
+    
+  } catch (error) {
+    throw new Error(`Cleanup failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
+ * Calculate folder size recursively
+ */
+async function getFolderSize(folderPath: string): Promise<number> {
+  try {
+    const entries = await fs.readdir(folderPath, { withFileTypes: true });
+    let size = 0;
+    
+    for (const entry of entries) {
+      const fullPath = path.join(folderPath, entry.name);
+      if (entry.isDirectory()) {
+        size += await getFolderSize(fullPath);
+      } else {
+        const stats = await fs.stat(fullPath);
+        size += stats.size;
+      }
+    }
+    
+    return size;
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Error handler
  */
 function handleError(error: unknown): void {
@@ -1132,12 +1316,25 @@ process.on('unhandledRejection', (reason) => {
   handleError(reason);
 });
 
+/**
+ * Initialize CLI and perform auto-cleanup
+ */
+async function initializeCLI(): Promise<void> {
+  try {
+    // Perform silent cleanup of old temp files
+    const directoryService = getDirectoryService();
+    await directoryService.cleanupTempFiles(24); // Clean files older than 24 hours
+  } catch {
+    // Silently ignore cleanup errors - not critical for CLI operation
+  }
+}
+
 // Parse CLI arguments
 // Always execute when this CLI file is run (it has #!/usr/bin/env node shebang)
 if (process.argv.length <= 2) {
   // No arguments provided - launch interactive mode
-  interactiveMode().catch(handleError);
+  initializeCLI().then(() => interactiveMode()).catch(handleError);
 } else {
   // Arguments provided - parse commands
-  program.parse();
+  initializeCLI().then(() => program.parse()).catch(handleError);
 }

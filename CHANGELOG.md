@@ -5,6 +5,26 @@ All notable changes to Koko TTS CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2025-01-18
+
+### Added
+- **Audio Stitching**: Chunks are now automatically combined into single audio files by default
+  - `--keep-chunks` flag to preserve individual chunk files alongside combined output
+  - `--no-stitch` flag to disable stitching and save chunks separately
+- **Temp Directory Management**: Proper usage of session-based temp directories for processing
+  - Auto-cleanup of temp files older than 24 hours on CLI startup
+  - New `cleanup` command for manual temp file cleanup with `--verbose` and `--max-age` options
+- **Enhanced Chunking**: Better intermediate file handling using temp directories
+
+### Fixed
+- **Commander.js Option Parsing**: Fixed `--no-stitch` flag defaulting incorrectly
+- **Audio Output**: Long text now generates single combined files instead of multiple chunks by default
+
+### Improved
+- **User Experience**: Clear messaging for stitched vs separate chunk outputs
+- **File Organization**: Temp directories used for intermediate processing, final outputs remain clean
+- **Performance**: More efficient temp file management with automatic cleanup
+
 ## [0.2.0] - 2025-01-18
 
 ### Added

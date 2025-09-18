@@ -21,6 +21,13 @@ export interface SessionInfo {
   tempDir: string;
 }
 
+export interface ChunkedOutputPaths {
+  combinedPath: string;
+  chunkDir?: string;
+  baseDir: string;
+  basename: string;
+}
+
 export class DirectoryService {
   private static instance: DirectoryService;
   private readonly rootDir: string;
@@ -131,6 +138,66 @@ export class DirectoryService {
     
     const finalFilename = filename || this.getDefaultOutputFilename();
     return path.join(outputDir, finalFilename);
+  }
+
+  /**
+   * Generate paths for chunked audio output
+   * Creates organized structure: baseDir/filename.wav (combined) and baseDir/filename/chunks/ (individual)
+   */
+  async getChunkedOutputPaths(
+    filename?: string,
+    mode: 'cli' | 'interactive' | 'batch' = 'cli',
+    useDate = true,
+    keepChunks = false
+  ): Promise<ChunkedOutputPaths> {
+    const outputDir = this.getOutputDir(mode, useDate);
+    await fs.mkdir(outputDir, { recursive: true });
+    
+    const finalFilename = filename || this.getDefaultOutputFilename();
+    const basename = path.basename(finalFilename, path.extname(finalFilename));
+    
+    const combinedPath = path.join(outputDir, finalFilename);
+    
+    let chunkDir: string | undefined;
+    if (keepChunks) {
+      chunkDir = path.join(outputDir, basename, 'chunks');
+    }
+    
+    return {
+      combinedPath,
+      chunkDir,
+      baseDir: outputDir,
+      basename
+    };
+  }
+
+  /**
+   * Check if a filename indicates chunked audio files
+   */
+  static isChunkedFilename(filename: string): boolean {
+    return /_\d{3}\.(wav|mp3|flac)$/i.test(filename);
+  }
+
+  /**
+   * Find related chunk files for a given base filename
+   */
+  async findChunkFiles(baseFilename: string, directory: string): Promise<string[]> {
+    try {
+      const basename = path.basename(baseFilename, path.extname(baseFilename));
+      const extension = path.extname(baseFilename);
+      const files = await fs.readdir(directory);
+      
+      const chunkFiles = files
+        .filter(file => {
+          const match = file.match(new RegExp(`^${basename}_(\\d{3})\\${extension}$`, 'i'));
+          return match !== null;
+        })
+        .sort(); // Natural sort by filename
+      
+      return chunkFiles.map(file => path.join(directory, file));
+    } catch {
+      return [];
+    }
   }
 
   /**

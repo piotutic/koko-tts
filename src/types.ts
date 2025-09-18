@@ -95,6 +95,8 @@ export interface CliOptions {
   autoChunk?: boolean;
   chunkSize?: number;
   warnLimit?: boolean;
+  keepChunks?: boolean;
+  noStitch?: boolean;
 }
 
 // Cache configuration interface
