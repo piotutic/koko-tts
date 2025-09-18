@@ -92,6 +92,19 @@ export interface CliOptions {
   saveConfig?: string;
   batch?: boolean;
   preview?: boolean;
+  autoChunk?: boolean;
+  chunkSize?: number;
+  warnLimit?: boolean;
+}
+
+// Cache configuration interface
+export interface CacheConfig {
+  enabled?: boolean;
+  directory?: string;
+  maxSizeBytes?: number;
+  ttlSeconds?: number;
+  maxEntries?: number;
+  cleanupIntervalMs?: number;
 }
 
 // Configuration file structure
@@ -99,6 +112,7 @@ export interface ConfigFile {
   defaults: Partial<CliOptions>;
   presets?: Record<string, Partial<GenerationOptions>>;
   voices?: Partial<Record<VoiceId, Partial<GenerationOptions>>>;
+  cache?: CacheConfig;
 }
 
 // Batch processing job

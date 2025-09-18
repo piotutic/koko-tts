@@ -15,6 +15,7 @@ import path from 'path';
 import { TypedKokoroTTS } from './tts-engine.js';
 import { VOICES, VOICE_CATEGORIES, VOICE_PRESETS, getVoiceInfo } from './voices.js';
 import { FileUtils, ConfigUtils, ValidationUtils, StringUtils, PlatformUtils } from './utils.js';
+import { getDirectoryService } from './services/directory.js';
 import type { 
   CliOptions, 
   VoiceId, 
@@ -50,6 +51,9 @@ program
   .option('--output-dir <dir>', 'Output directory for batch processing')
   .option('--config <file>', 'Configuration file path')
   .option('--save-config <file>', 'Save current options to config file')
+  .option('--auto-chunk', 'Automatically split long text into chunks', true)
+  .option('--chunk-size <size>', 'Maximum characters per chunk (with safety buffer)', parseInt, 250)
+  .option('--warn-limit', 'Show warning when text exceeds model limits', true)
   .option('--verbose', 'Verbose output', false)
   .option('--quiet', 'Quiet mode (minimal output)', false);
 
@@ -188,6 +192,21 @@ async function parseAndValidateOptions(options: any, text?: string): Promise<Cli
     }
   }
 
+  // Determine output path - use smart paths when default is used
+  let outputPath = options.output;
+  if (!outputPath || outputPath === 'output.wav') {
+    // Initialize directory service for smart output paths
+    const directoryService = getDirectoryService();
+    await directoryService.ensureDirectories();
+    
+    // Use smart output path for organized storage
+    outputPath = await directoryService.getSmartOutputPath(
+      undefined, // No specific filename - will auto-generate
+      'cli', // CLI mode
+      true // Use date-based organization
+    );
+  }
+
   // Build CLI options
   const cliOptions: CliOptions = {
     voice: options.voice as VoiceId || 'af_sarah',
@@ -195,7 +214,7 @@ async function parseAndValidateOptions(options: any, text?: string): Promise<Cli
     temperature: options.temperature || 0.7,
     device: options.device as Device || 'cpu',
     dtype: options.dtype as DType || 'q8',
-    output: options.output || 'output.wav',
+    output: outputPath,
     format: options.format as AudioFormat || 'wav',
     streaming: options.streaming || false,
     text: text || '',
@@ -209,7 +228,10 @@ async function parseAndValidateOptions(options: any, text?: string): Promise<Cli
     config: options.config,
     saveConfig: options.saveConfig,
     batch: false,
-    preview: false
+    preview: false,
+    autoChunk: options.autoChunk !== false, // Default to true
+    chunkSize: options.chunkSize || 250,
+    warnLimit: options.warnLimit !== false // Default to true
   };
 
   // Apply configuration defaults
@@ -251,6 +273,22 @@ async function generateSpeech(options: CliOptions): Promise<void> {
 
     if (!text) {
       throw new Error('No text provided');
+    }
+
+    // Check if text exceeds model limits and handle chunking
+    const maxSingleChunkSize = options.chunkSize || 250;
+    const needsChunking = text.length > maxSingleChunkSize && options.autoChunk;
+    
+    if (needsChunking && options.warnLimit && !options.quiet) {
+      const estimatedDuration = Math.ceil(text.length / maxSingleChunkSize) * 25; // ~25 seconds per chunk
+      console.log(chalk.yellow(`⚠️  Text is ${text.length} characters (${Math.ceil(text.length / maxSingleChunkSize)} chunks)`));
+      console.log(chalk.yellow(`   Estimated total duration: ~${Math.floor(estimatedDuration / 60)}:${(estimatedDuration % 60).toString().padStart(2, '0')}`));
+      console.log(chalk.gray('   Use --no-auto-chunk to disable automatic chunking\n'));
+    }
+
+    // Process text in chunks if needed
+    if (needsChunking) {
+      return await generateChunkedSpeech(text, options);
     }
 
     // Display generation info (reduced for interactive mode)
@@ -432,6 +470,154 @@ async function generateStreamingSpeech(
 }
 
 /**
+ * Generate speech from long text by splitting into chunks
+ */
+async function generateChunkedSpeech(text: string, options: CliOptions): Promise<void> {
+  const spinner = ora();
+  
+  try {
+    // Split text into chunks
+    const chunks = StringUtils.splitTextIntoChunks(text, options.chunkSize || 250);
+    
+    if (!options.quiet) {
+      console.log(chalk.blue(`🔄 Processing ${chunks.length} chunks...`));
+    }
+
+    // Initialize TTS model
+    if (!options.quiet) {
+      const loadingMsg = options.interactive ? 'Loading model...' : 'Loading Kokoro TTS model...';
+      spinner.start(loadingMsg);
+    }
+    
+    const tts = await TypedKokoroTTS.fromPretrained('onnx-community/Kokoro-82M-v1.0-ONNX', {
+      dtype: options.dtype,
+      device: options.device,
+      progress_callback: (progress) => {
+        if (progress.status === 'downloading' && !options.quiet) {
+          spinner.text = `⬇️  Downloading model: ${Math.round(progress.progress || 0)}%`;
+        }
+      }
+    });
+
+    if (!options.quiet) {
+      const successMsg = options.interactive ? 'Model ready' : 'Model loaded successfully!';
+      spinner.succeed(successMsg);
+    }
+
+    // Process each chunk
+    const audioChunks: any[] = [];
+    const generationOptions = {
+      voice: options.voice,
+      speed: options.speed,
+      temperature: options.temperature
+    };
+
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      if (!chunk) {
+        throw new Error(`Chunk ${i + 1} is empty`);
+      }
+      
+      const chunkNum = i + 1;
+      
+      if (!options.quiet) {
+        const progressMsg = options.interactive 
+          ? `Processing chunk ${chunkNum}/${chunks.length}...`
+          : `🎵 Generating chunk ${chunkNum}/${chunks.length} (${chunk.length} chars)...`;
+        spinner.start(progressMsg);
+      }
+
+      try {
+        const { audio } = await tts.generate(chunk, generationOptions);
+        audioChunks.push(audio);
+        
+        if (!options.quiet) {
+          const successMsg = options.interactive
+            ? `Chunk ${chunkNum}/${chunks.length} ready`
+            : `✅ Chunk ${chunkNum}/${chunks.length} completed`;
+          spinner.succeed(successMsg);
+        }
+      } catch (error) {
+        spinner.fail(`❌ Failed to generate chunk ${chunkNum}/${chunks.length}`);
+        throw new Error(`Chunk ${chunkNum} generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+
+    // Save audio chunks as separate files
+    if (!options.quiet) {
+      spinner.start('💾 Saving audio chunks...');
+    }
+    
+    const outputFiles = await combineAudioChunks(audioChunks, options.output);
+    
+    if (!options.quiet) {
+      if (outputFiles.length === 1) {
+        spinner.succeed('🎉 Audio generated successfully!');
+      } else {
+        spinner.succeed(`🎉 All ${outputFiles.length} audio chunks saved!`);
+      }
+      
+      if (!options.interactive) {
+        if (outputFiles.length === 1) {
+          console.log(`💾 Audio saved to: ${chalk.green(outputFiles[0])}`);
+        } else {
+          console.log(`💾 Generated ${chalk.green(outputFiles.length.toString())} audio files:`);
+          outputFiles.forEach((file, index) => {
+            console.log(`   ${index + 1}. ${chalk.green(path.basename(file))}`);
+          });
+          console.log(chalk.yellow('\n📝 Note: Audio concatenation not yet implemented - each chunk saved separately'));
+        }
+        console.log(`📊 Total chunks processed: ${chalk.green(chunks.length.toString())}`);
+        
+        // Show playback commands for first file
+        const playCommands = PlatformUtils.getAudioPlayerCommands(outputFiles[0]!);
+        console.log('\n🔊 To play the first audio file:');
+        playCommands.forEach(cmd => console.log(`  ${chalk.cyan(cmd)}`));
+      } else {
+        // Interactive mode - store output files for later display
+        (options as any)._outputFiles = outputFiles;
+      }
+    }
+
+  } catch (error) {
+    spinner.fail('Chunked generation failed');
+    throw error;
+  }
+}
+
+/**
+ * Save audio chunks as separate numbered files
+ */
+async function combineAudioChunks(audioChunks: any[], outputPath: string): Promise<string[]> {
+  if (audioChunks.length === 0) {
+    throw new Error('No audio chunks to combine');
+  }
+  
+  if (audioChunks.length === 1) {
+    // Single chunk, just save directly
+    await audioChunks[0].save(outputPath);
+    return [outputPath];
+  }
+
+  // Generate numbered filenames for multiple chunks
+  const outputFiles: string[] = [];
+  const baseDir = path.dirname(outputPath);
+  const baseName = path.basename(outputPath, path.extname(outputPath));
+  const extension = path.extname(outputPath);
+
+  for (let i = 0; i < audioChunks.length; i++) {
+    const chunkNumber = (i + 1).toString().padStart(3, '0');
+    const chunkFilename = `${baseName}_${chunkNumber}${extension}`;
+    const chunkPath = path.join(baseDir, chunkFilename);
+    
+    await audioChunks[i].save(chunkPath);
+    outputFiles.push(chunkPath);
+  }
+
+  return outputFiles;
+}
+
+/**
  * List available voices
  */
 async function listVoices(options: any): Promise<void> {
@@ -578,11 +764,11 @@ async function interactiveGenerate(): Promise<void> {
             const trimmed = input.trim();
             if (!trimmed) return 'Please enter a file path';
             
-            // Check if file exists
-            await FileUtils.readTextFile(trimmed, { maxSize: 1024 }); // Small read to validate
+            // Check if file exists and is readable
+            await fs.access(trimmed, fs.constants.F_OK | fs.constants.R_OK);
             return true;
           } catch (error) {
-            return `Error: ${error instanceof Error ? error.message : 'File not found or invalid'}`;
+            return `Error: File not found or not readable`;
           }
         },
         prefix: ''
@@ -680,9 +866,21 @@ async function interactiveGenerate(): Promise<void> {
     }
   ]);
 
-  const filename = filenamePrompt.filename;
+  let filename = filenamePrompt.filename;
+  
+  // Use organized output directory for interactive mode
+  const directoryService = getDirectoryService();
+  await directoryService.ensureDirectories();
+  
+  // Create the full output path in the interactive directory
+  const outputPath = await directoryService.getSmartOutputPath(
+    filename,
+    'interactive',
+    true // Use date-based organization
+  );
 
-  console.log(chalk.gray(`\nGenerating: ${filename}`));
+  console.log(chalk.gray(`\nGenerating: ${path.basename(outputPath)}`));
+  console.log(chalk.gray(`Location: ${path.dirname(outputPath)}`));
 
   const options: CliOptions = {
     text: text,
@@ -691,7 +889,7 @@ async function interactiveGenerate(): Promise<void> {
     temperature: 0.7,
     device: 'cpu' as Device,
     dtype: 'q8' as DType,
-    output: filename,
+    output: outputPath,
     format: 'wav' as AudioFormat,
     streaming: false,
     help: false,
@@ -700,12 +898,42 @@ async function interactiveGenerate(): Promise<void> {
     verbose: false,
     quiet: false,
     batch: false,
-    preview: false
+    preview: false,
+    autoChunk: true,
+    chunkSize: 250,
+    warnLimit: true
   };
 
   await generateSpeech(options);
   
-  console.log(chalk.green(`\n✅ Success! Generated: ${filename}`));
+  // Check if multiple files were generated (chunked output)
+  const baseName = path.basename(outputPath, path.extname(outputPath));
+  const extension = path.extname(outputPath);
+  const dir = path.dirname(outputPath);
+  
+  try {
+    const files = await fs.readdir(dir);
+    const chunkFiles = files.filter(file => 
+      file.startsWith(`${baseName}_`) && file.endsWith(extension)
+    ).sort();
+    
+    if (chunkFiles.length > 1) {
+      console.log(chalk.green(`\n✅ Success! Generated ${chunkFiles.length} audio files:`));
+      chunkFiles.forEach((file, index) => {
+        console.log(chalk.gray(`   ${index + 1}. ${file}`));
+      });
+      console.log(chalk.yellow('\n📝 Note: Long text was split into chunks - each saved separately'));
+      console.log(chalk.gray(`   Saved to: ${dir}`));
+    } else {
+      console.log(chalk.green(`\n✅ Success! Generated: ${path.basename(outputPath)}`));
+      console.log(chalk.gray(`   Saved to: ${dir}`));
+    }
+  } catch (error) {
+    // Fallback to original message if we can't check for chunks
+    console.log(chalk.green(`\n✅ Success! Generated: ${path.basename(outputPath)}`));
+    console.log(chalk.gray(`   Saved to: ${dir}`));
+  }
+  
   console.log(chalk.gray('Press Enter to continue...'));
   await inquirer.prompt([{ name: 'continue', message: '', prefix: '' }]);
 }

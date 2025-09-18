@@ -15,6 +15,7 @@ A simple, powerful command-line tool for text-to-speech generation using the Kok
 - 📦 **Zero Config** - Works out of the box
 - 🌊 **Streaming** - Real-time generation for long texts
 - 💾 **Multiple Formats** - WAV and PCM output
+- 🔄 **Auto-Chunking** - Bypass 25-second limit with automatic text splitting
 
 ## 🚀 Quick Start
 

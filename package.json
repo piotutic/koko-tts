@@ -11,6 +11,10 @@
     "cli": "node --loader ts-node/esm src/cli.ts",
     "clean": "rm -rf dist",
     "type-check": "tsc --noEmit",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "format": "prettier --write src/**/*.ts",
+    "format:check": "prettier --check src/**/*.ts",
     "prepublishOnly": "npm run build"
   },
   "keywords": [

@@ -4,6 +4,7 @@
 
 import fs from 'fs/promises';
 import path from 'path';
+import os from 'os';
 import yaml from 'yaml';
 import type { 
   ValidationError, 
@@ -145,10 +146,19 @@ export class ConfigUtils {
   private static readonly CONFIG_FILENAME = '.kokororc';
 
   /**
-   * Load configuration file
+   * Load configuration file with new directory structure support
    */
   static async loadConfig(configPath?: string): Promise<ConfigFile | null> {
+    // Import directory service dynamically to avoid circular dependencies
+    const { getDirectoryService } = await import('./services/directory.js');
+    const directoryService = getDirectoryService();
+    
     const searchPaths = configPath ? [configPath] : [
+      // New location (preferred)
+      directoryService.getConfigPath('config.yml'),
+      directoryService.getConfigPath('config.yaml'),
+      directoryService.getConfigPath('config.json'),
+      // Legacy locations (for backward compatibility)
       path.join(process.cwd(), this.CONFIG_FILENAME),
       path.join(process.cwd(), `${this.CONFIG_FILENAME}.yml`),
       path.join(process.cwd(), `${this.CONFIG_FILENAME}.yaml`),
@@ -162,10 +172,14 @@ export class ConfigUtils {
         const content = await fs.readFile(searchPath, 'utf-8');
         const ext = path.extname(searchPath);
         
-        if (ext === '.json') {
-          return JSON.parse(content);
-        } else {
-          return yaml.parse(content);
+        try {
+          if (ext === '.json') {
+            return JSON.parse(content);
+          } else {
+            return yaml.parse(content);
+          }
+        } catch (parseError) {
+          throw new Error(`Invalid ${ext === '.json' ? 'JSON' : 'YAML'} format in config file: ${searchPath}`);
         }
       } catch {
         continue;
@@ -179,7 +193,11 @@ export class ConfigUtils {
    * Save configuration file
    */
   static async saveConfig(config: ConfigFile, configPath?: string): Promise<string> {
-    const filePath = configPath || path.join(process.cwd(), `${this.CONFIG_FILENAME}.yml`);
+    // Import directory service dynamically to avoid circular dependencies
+    const { getDirectoryService } = await import('./services/directory.js');
+    const directoryService = getDirectoryService();
+    
+    const filePath = configPath || directoryService.getConfigPath('config.yml');
     const content = yaml.stringify(config, { indent: 2 });
     await FileUtils.writeFile(filePath, content, { createDirs: true });
     return filePath;
@@ -328,7 +346,12 @@ export class StringUtils {
       unitIndex++;
     }
 
-    return `${size.toFixed(2)} ${units[unitIndex]}`;
+    const unit = units[unitIndex];
+    if (!unit) {
+      throw new Error('Invalid unit index in formatFileSize');
+    }
+
+    return `${size.toFixed(2)} ${unit}`;
   }
 
   /**
@@ -350,51 +373,129 @@ export class StringUtils {
   }
 
   /**
-   * Split text into chunks for processing
+   * Split text into chunks for processing with improved sentence boundaries
    */
-  static splitTextIntoChunks(text: string, maxChunkSize: number = 1000): string[] {
+  static splitTextIntoChunks(text: string, maxChunkSize: number = 250): string[] {
     if (text.length <= maxChunkSize) return [text];
 
     const chunks: string[] = [];
-    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    
+    // Enhanced regex to include more sentence endings and paragraph breaks
+    const sentencePattern = /[.!?;:]+(?:\s|$)|\n\n+/g;
+    
+    // Split text while preserving the delimiters (punctuation)
+    const parts = text.split(sentencePattern);
+    const delimiters = text.match(sentencePattern) || [];
+    
+    // Reconstruct sentences with their punctuation
+    const sentences: string[] = [];
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i]?.trim() || '';
+      const delimiter = delimiters[i] || '';
+      if (part.length > 0) {
+        sentences.push(part + delimiter.trim());
+      }
+    }
     
     let currentChunk = '';
     
-    for (const sentence of sentences) {
+    for (let i = 0; i < sentences.length; i++) {
+      const sentence = sentences[i] || '';
       const trimmedSentence = sentence.trim();
-      if (currentChunk.length + trimmedSentence.length + 1 <= maxChunkSize) {
-        currentChunk += (currentChunk ? '. ' : '') + trimmedSentence;
+      
+      // Check if adding this sentence would exceed the limit
+      const potentialLength = currentChunk.length + (currentChunk ? 1 : 0) + trimmedSentence.length;
+      
+      if (potentialLength <= maxChunkSize) {
+        currentChunk += (currentChunk ? ' ' : '') + trimmedSentence;
       } else {
+        // Current chunk is complete, start new one
         if (currentChunk) {
-          chunks.push(currentChunk + '.');
+          chunks.push(currentChunk);
           currentChunk = trimmedSentence;
         } else {
-          // Sentence is too long, split by words
-          const words = trimmedSentence.split(' ');
-          let wordChunk = '';
-          
-          for (const word of words) {
-            if (wordChunk.length + word.length + 1 <= maxChunkSize) {
-              wordChunk += (wordChunk ? ' ' : '') + word;
-            } else {
-              if (wordChunk) {
-                chunks.push(wordChunk);
-                wordChunk = word;
-              } else {
-                chunks.push(word); // Single word too long
-              }
-            }
+          // Single sentence is too long, split by smaller boundaries
+          const subChunks = this.splitLongSentence(trimmedSentence, maxChunkSize);
+          chunks.push(...subChunks.slice(0, -1)); // Add all but the last
+          currentChunk = subChunks[subChunks.length - 1] ?? ''; // Keep last as current
+        }
+      }
+    }
+    
+    // Add the final chunk if it exists
+    if (currentChunk.trim()) {
+      chunks.push(currentChunk);
+    }
+    
+    return chunks.filter(chunk => chunk.trim().length > 0);
+  }
+
+  /**
+   * Split a single long sentence using fallback methods
+   */
+  private static splitLongSentence(sentence: string, maxChunkSize: number): string[] {
+    const chunks: string[] = [];
+    
+    // Try splitting by commas first
+    const commaParts = sentence.split(/,\s+/);
+    if (commaParts.length > 1) {
+      let currentChunk = '';
+      
+      for (const part of commaParts) {
+        const potentialLength = currentChunk.length + (currentChunk ? 2 : 0) + part.length;
+        
+        if (potentialLength <= maxChunkSize) {
+          currentChunk += (currentChunk ? ', ' : '') + part;
+        } else {
+          if (currentChunk) {
+            chunks.push(currentChunk);
+            currentChunk = part;
+          } else {
+            // Part is still too long, fall back to word splitting
+            const wordChunks = this.splitByWords(part, maxChunkSize);
+            chunks.push(...wordChunks.slice(0, -1));
+            currentChunk = wordChunks[wordChunks.length - 1] ?? '';
           }
-          
-          if (wordChunk) {
-            currentChunk = wordChunk;
-          }
+        }
+      }
+      
+      if (currentChunk) {
+        chunks.push(currentChunk);
+      }
+      
+      return chunks;
+    }
+    
+    // Fall back to word splitting if no commas
+    return this.splitByWords(sentence, maxChunkSize);
+  }
+
+  /**
+   * Split text by words as a last resort
+   */
+  private static splitByWords(text: string, maxChunkSize: number): string[] {
+    const chunks: string[] = [];
+    const words = text.split(' ');
+    let currentChunk = '';
+    
+    for (const word of words) {
+      const potentialLength = currentChunk.length + (currentChunk ? 1 : 0) + word.length;
+      
+      if (potentialLength <= maxChunkSize) {
+        currentChunk += (currentChunk ? ' ' : '') + word;
+      } else {
+        if (currentChunk) {
+          chunks.push(currentChunk);
+          currentChunk = word;
+        } else {
+          // Single word too long - force it
+          chunks.push(word);
         }
       }
     }
     
     if (currentChunk) {
-      chunks.push(currentChunk + '.');
+      chunks.push(currentChunk);
     }
     
     return chunks;
@@ -467,11 +568,9 @@ export class PlatformUtils {
       const checkCmd = process.platform === 'win32' ? `where ${command}` : `which ${command}`;
       execSync(checkCmd, { stdio: 'ignore' });
       return true;
-    } catch {
+    } catch (error) {
+      // Handle both import errors and execution errors
       return false;
     }
   }
 }
-
-// Import os for homedir
-import os from 'os';
