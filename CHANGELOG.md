@@ -1,129 +1,66 @@
 # Changelog
 
-All notable changes to the Koko TTS project will be documented in this file.
+All notable changes to Koko TTS CLI will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.2] - 2024-12-18
-
-### Fixed
-
-- **Package Contents**: Fixed npm package including unwanted files (.claude/, \*.tgz)
-- **Clean Distribution**: Updated .npmignore to exclude development files
-- **GitHub URLs**: Fixed repository and homepage URLs in package.json
-- **Package Lock**: Fixed .npmignore to properly include package-lock.json in published package
-
-## [0.1.1] - 2024-12-17
-
-### Fixed
-
-- **CLI Execution**: Fixed CLI not executing when installed via npm/npx
-- **Module Loading**: Removed problematic `import.meta.url` check that prevented CLI from running
-- **Interactive Mode**: Interactive mode now launches correctly when no arguments are provided
-
-## [0.1.0] - 2024-12-17
+## [0.2.0] - 2025-01-18
 
 ### Added
+- **Organized Directory Structure**: New `.koko-tts/` directory for all app files
+  - Date-based output organization: `.koko-tts/outputs/YYYY-MM-DD/`
+  - Separate directories for CLI and interactive mode outputs
+  - Session-based temp directories with auto-cleanup
+  - Auto-migration from legacy `.koko-cache` and `.kokororc.yml`
+- **Modular Service Architecture**: 
+  - `DirectoryService` for organized file management
+  - `CacheService` with LRU eviction and TTL
+  - `AudioService` for centralized audio generation
+  - `ProgressService` for enhanced user feedback
+- **Enhanced Error Handling**: Comprehensive error recovery with retry logic
+- **Code Quality Tools**: ESLint and Prettier configurations
+- **Smart Text Chunking**: Better sentence boundary detection for natural speech
 
-#### 🎤 Interactive Mode
+### Fixed
+- **Complete Chunk Generation**: All chunks are now saved as separate files (not just the first)
+- **Interactive Mode Directory**: Fixed output to use organized directory structure
+- **File Input Validation**: Removed artificial 1KB file size limit
+- **TypeScript Issues**: Fixed strict mode compliance and import problems
 
-- **Default Interactive Mode**: Just run `koko` to launch the interactive interface
-- **Clean UI**: Professional, minimal interface with screen clearing
-- **Smart Workflow**: Guided experience from text input to audio generation
-- **File Input Support**: Choose between typing text or loading from files
-- **Voice Browser**: Explore available voices by category
-- **Filename Customization**: Custom output names or smart auto-generated timestamps
+### Improved
+- **Chunking Algorithm**: 
+  - Reduced default chunk size from 1000 to 250 characters for safety buffer
+  - Enhanced regex to include semicolons, colons, and paragraph breaks
+  - Prioritized breaking points: paragraphs → sentences → commas → words
+  - Preserved punctuation for better prosody
+- **User Experience**:
+  - Clear progress indicators with timing information
+  - Better error messages with suggested actions
+  - Organized file outputs with clear location feedback
+  - Intelligent caching with cache hit/miss tracking
 
-#### 🚀 CLI Features
+### Technical
+- **Dependencies**: Added development dependencies for linting and formatting
+- **TypeScript**: Enhanced type safety and strict mode compliance
+- **Architecture**: Service-oriented design for better maintainability
 
-- **28 Professional Voices**: High-quality American and British English voices
-- **Multiple Input Methods**: Direct text, file input (`--file`), interactive mode
-- **Voice Control**: Adjustable speed (0.5-2.0x) and temperature (0.1-1.0)
-- **Multiple Formats**: WAV and PCM output support
-- **Streaming Mode**: Real-time generation for long texts
-- **Smart Defaults**: Zero configuration required
+## [0.1.2] - 2025-01-17
 
-#### 🛠️ Developer Experience
+### Fixed
+- Package preparation for npm publishing
+- Clean npm package structure
 
-- **TypeScript**: Full type safety and modern development
-- **Nix Development**: Reproducible development environment
-- **Comprehensive CLI**: Help system, voice listing, configuration management
-- **Error Handling**: Graceful error management with helpful messages
+## [0.1.1] - 2025-01-17
 
-#### 📁 Project Structure
+### Fixed
+- CLI execution with npm/npx compatibility
 
-- **Clean Architecture**: Modular TypeScript codebase
-- **Professional Packaging**: Ready for npm publication
-- **Documentation**: Comprehensive README with examples
-- **Testing**: Built-in validation and error handling
+## [0.1.0] - 2025-01-17
 
-### Technical Details
-
-#### Dependencies
-
-- **Kokoro JS**: v1.0.0 - Core TTS engine
-- **Commander**: v12.0.0 - CLI framework
-- **Inquirer**: v9.2.0 - Interactive prompts
-- **Chalk**: v5.3.0 - Terminal styling
-- **Ora**: v8.0.0 - Elegant spinners
-
-#### Voice Categories
-
-- **Recommended**: `af_heart`, `af_bella`, `bf_emma`, `am_michael`, `bm_george`
-- **American Female**: 11 voices (af\_\*)
-- **American Male**: 9 voices (am\_\*)
-- **British Female**: 4 voices (bf\_\*)
-- **British Male**: 4 voices (bm\_\*)
-
-#### Performance
-
-- **Model**: Kokoro-82M-v1.0-ONNX (~100MB download on first run)
-- **Quality Grades**: A+ to D+ voice quality ratings
-- **Generation Speed**: Typically 1-5 seconds per sentence
-- **File Support**: Up to 10MB text files, common formats (.txt, .md, .json, .csv)
-
-### Usage Examples
-
-```bash
-# Interactive mode (default)
-koko
-
-# Command line generation
-koko generate "Hello world"
-koko generate --file story.txt --voice af_heart
-
-# Voice exploration
-koko voices --category recommended
-
-# Advanced usage
-koko generate "Custom speech" --speed 0.8 --temperature 0.9 --output presentation.wav
-```
-
-### System Requirements
-
-- **Node.js**: 18.0.0 or higher
-- **Platform**: Linux, macOS, Windows
-- **Internet**: Required for initial model download
-- **Storage**: ~200MB for models and dependencies
-
----
-
-## How to Upgrade
-
-```bash
-# Update to latest version
-npm update -g koko-tts
-
-# Or reinstall
-npm uninstall -g koko-tts
-npm install -g koko-tts@latest
-```
-
-## Contributing
-
-See [README.md](README.md) for development setup and contribution guidelines.
-
-## License
-
-Apache License 2.0 - see [LICENSE](LICENSE) file for details.
+### Added
+- Initial release of Koko TTS CLI
+- 28 professional voices with quality grades
+- Interactive and command-line modes
+- Multiple output formats (WAV, PCM)
+- Voice configuration and presets

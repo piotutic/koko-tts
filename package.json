@@ -1,6 +1,6 @@
 {
   "name": "koko-tts",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "🎤 The friendly TTS CLI - Just run 'koko' for instant text-to-speech magic!",
   "main": "dist/cli.js",
   "type": "module",

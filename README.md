@@ -276,6 +276,27 @@ koko generate "Text" --dtype q4
 4. **Long Texts**: Use `--streaming` for files over 500 characters
 5. **File Format**: WAV provides best compatibility
 
+## 📁 Organized Directory Structure
+
+Koko TTS automatically organizes all files in a `.koko-tts/` directory:
+
+```
+.koko-tts/
+├── config/              # Configuration files
+├── cache/               # Audio cache for faster re-generation
+├── outputs/             # Generated audio files
+│   ├── YYYY-MM-DD/      # CLI outputs by date
+│   └── interactive/     # Interactive mode outputs
+│       └── YYYY-MM-DD/
+└── temp/                # Temporary files (auto-cleaned)
+```
+
+**Benefits:**
+- Clean workspace (no scattered output files)
+- Easy cleanup (delete entire `.koko-tts/` folder)
+- Organized by date and generation mode
+- Add to `.gitignore`: `echo ".koko-tts/" >> .gitignore`
+
 ## 🐛 Troubleshooting
 
 ### Common Issues

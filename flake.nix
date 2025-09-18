@@ -16,7 +16,7 @@
 
       koko-tts = pkgs.stdenv.mkDerivation rec {
         pname = "koko-tts";
-        version = "0.1.2";
+        version = "0.2.0";
 
         src = ./.;
 
@@ -106,6 +106,9 @@
           echo "  npm run cli         - CLI TTS tool (ts-node)"
           echo "  npm run watch       - Watch mode compilation"
           echo "  npm run type-check  - Type checking only"
+          echo "  npm run lint        - Run ESLint"
+          echo "  npm run lint:fix    - Auto-fix ESLint issues"
+          echo "  npm run format      - Format with Prettier"
           echo ""
           echo "📁 TypeScript project structure:"
           echo "  src/demo.ts         - Main demo application"
@@ -115,7 +118,10 @@
           echo "  src/voices.ts       - Voice configurations"
           echo "  src/types.ts        - TypeScript type definitions"
           echo "  src/utils.ts        - Utility functions"
+          echo "  src/services/       - Service layer (cache, audio, directory)"
+          echo "  src/errors.ts       - Error handling utilities"
           echo "  dist/               - Compiled JavaScript output"
+          echo "  .koko-tts/          - Organized output directory"
           echo ""
 
           # Ensure node_modules is available
@@ -134,6 +140,12 @@
           if [ ! -d "dist" ]; then
             echo "🔨 Building TypeScript..."
             npm run build
+          fi
+
+          # Initialize .koko-tts directory structure for development
+          if [ ! -d ".koko-tts" ]; then
+            echo "📁 Creating .koko-tts directory structure..."
+            mkdir -p .koko-tts/{config,cache,outputs,temp}
           fi
 
           export PATH="$PWD/node_modules/.bin:$PATH"
