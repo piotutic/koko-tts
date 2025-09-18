@@ -26,9 +26,9 @@
   ],
   "author": "Pio Tutic",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/your-username/koko-tts#readme",
+  "homepage": "https://github.com/piotutic/koko-tts#readme",
   "bugs": {
-    "url": "https://github.com/your-username/koko-tts/issues"
+    "url": "https://github.com/piotutic/koko-tts/issues"
   },
   "dependencies": {
     "chalk": "^5.3.0",
